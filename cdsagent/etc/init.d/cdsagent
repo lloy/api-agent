@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+
+# chkconfig: 2345 20 80
+# description "cds-agent"
+
+set -e 
+
+NAME=cds-agent
+PIDFILE=/var/run/$NAME.pid
+DAEMON=/usr/bin/cds-agent
+
+DAEMON_OPTS="--baz=quux"
+
+export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+
+case "$1" in
+    start)
+        echo -n "start service":$NAME
+        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --$DAEMON_OPTS
+        exit 0
+        ;;
+    stop)
+        echo -n "stop service": $NAME
+        start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE 
+        exit 0
+        ;;
+    status)
+        start-stop-daemon --status --name $PROG
+        exit 0
+        ;;
+    restart)
+        echo -n "Restarting service: "$NAME
+	    start-stop-daemon --stop --quiet --oknodo --retry 30 --pidfile $PIDFILE
+	    start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+        exit 0
+        ;;
+    *):
+        echo "Usage: $1 {start|stop|status|restart}"
+        exit 1
+esac

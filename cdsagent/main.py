@@ -9,7 +9,7 @@ __author__ = 'Hardy.zheng'
 
 
 LOG = logging.getLogger(__name__)
-_TASKS = ['instance_create', 'instance_delete']
+_TASKS = ['instance_create', 'instance_delete', 'watch_dog']
 
 
 class AgentManager(os_service.Service):
@@ -23,7 +23,7 @@ class AgentManager(os_service.Service):
             worker = getattr(cfg.CONF, task, None)
             if not worker:
                 continue
-            if not hasattr(worker, 'actions'):
+            if not hasattr(worker, 'action'):
                 raise exc.NotSetPoller('not set poller in \
                     section configure file')
 

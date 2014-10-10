@@ -6,12 +6,13 @@ import uuid
 from cdsagent import cfg
 from cdsagent import exc
 from cdsagent.common.impl_mysql import _MysqlBase
+# from cdsagent.common.VIServer import ESXi_Server
 
 __author__ = 'Hardy.Zheng'
 __email__ = 'wei.zheng@yun-idc.com'
 
 LOG = logging.getLogger(__name__)
-CONF = cfg.CONF.mysql
+CONF = cfg.CONF
 
 _TASKSTATUS = ['OK', 'PROCESSING', 'ERROR']
 _INSTANCESTATUS = ['running', 'stop', 'error', 'deleteing', 'lanuching']
@@ -20,9 +21,9 @@ _IPSTATUS = {'alloc': 1, 'un_alloc': 0}
 
 class Instance(object):
 
-    tasks = CONF.tasks
-    instances = CONF.instances
-    iptable = CONF.iptable
+    tasks = CONF.mysql.tasks
+    instances = CONF.mysql.instances
+    iptable = CONF.mysql.iptable
 
     def found(self):
         pass
@@ -205,3 +206,25 @@ class InstanceDelete(Instance):
                 self.delete(ins)
         except Exception, e:
             LOG.error("delete Instances error: %s" % str(e))
+
+
+class InstanceWatchDog(Instance):
+    # esxi = ESXi_Server()
+
+    # def __init__(self):
+        # self.esxi_cli = self.esxi.connect_server(
+            # CONF.vsphere.host_ip,
+            # CONF.vsphere.username,
+            # CONF.vsphere.passwd)
+
+    def watch_dog(self):
+        pass
+
+    def _set_status(self):
+        pass
+
+    def run(self):
+        LOG.debug('run watch_dog')
+        LOG.debug('vsphere host_ip: %s' % CONF.vsphere.host_ip)
+        LOG.debug('vsphere username: %s' % CONF.vsphere.username)
+        LOG.debug('vsphere passwd: %s' % CONF.vsphere.passwd)

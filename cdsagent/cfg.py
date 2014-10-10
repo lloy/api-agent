@@ -29,12 +29,19 @@ _DEFAULT_CONFIG = {
         'instancetype': 'instancetype',
         'template': 'templatetype',
         'iaas': 'iaas'},
+    'vsphere': {
+        'host_ip': '172.16.0.11',
+        'username': 'root',
+        'passwd': 'cds-china'},
     'instance_create': {
-        'actions': 'create',
+        'action': 'create',
         'interval': 5},
     'instance_delete': {
-        'actions': 'delete',
+        'action': 'delete',
         'interval': 10},
+    'watch_dog': {
+        'action': 'watch',
+        'interval': 7},
     }
 
 
@@ -75,6 +82,15 @@ class MysqlSection(Section):
         super(MysqlSection, self).__init__(**kw)
 
 
+class VsphereSection(Section):
+
+    name = 'vsphere'
+
+    def __init__(self):
+        kw = _DEFAULT_CONFIG.get(self.name)
+        super(VsphereSection, self).__init__(**kw)
+
+
 class InstanceCreateSection(Section):
 
     name = 'instance_create'
@@ -93,13 +109,24 @@ class InstanceDeleteSection(Section):
         super(InstanceDeleteSection, self).__init__(**kw)
 
 
+class WatchDogSection(Section):
+
+    name = 'watch_dog'
+
+    def __init__(self):
+        kw = _DEFAULT_CONFIG.get(self.name)
+        super(WatchDogSection, self).__init__(**kw)
+
+
 class Factory():
     def get_section(self, name):
         sections = {
             'core': lambda: CoreSection(),
             'log': lambda: LogSection(),
+            'vsphere': lambda: VsphereSection(),
             'instance_create': lambda: InstanceCreateSection(),
             'instance_delete': lambda: InstanceDeleteSection(),
+            'watch_dog': lambda: WatchDogSection(),
             'mysql': lambda: MysqlSection()}
         return sections[name]()
 

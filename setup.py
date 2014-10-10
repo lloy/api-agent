@@ -26,6 +26,8 @@ setup(
             'create = cdsagent.instance:InstanceCreate'],
         'instance_delete': [
             'delete = cdsagent.instance:InstanceDelete'],
+        'watch_dog': [
+            'watch = cdsagent.instance:InstanceWatchDog'],
         },
     scripts=['cds-agent'],
     namespace_packages=['cdsagent'],

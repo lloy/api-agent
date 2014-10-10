@@ -1,13 +1,9 @@
-import os
-import os.path
-import time
-import socket
-import sys
-import string
-import ssl
-import base64
 from pysphere import VIServer
 from pysphere import VIException, VIApiException, FaultTypes
+import logging
+
+
+LOG = logging.getLogger(__name__)
 
 #Server Control
 class ESXi_Server:
@@ -43,17 +39,17 @@ class ESXi_Server:
     #both, datacenter and cluster are ignored.
     def get_registered_vms(self, param, status=None, datacenter=None, cluster=None, 
                            resource_pool=None):
-        if param not in ['ALL', 'POWER_ON', 'POWER_OFF', 'SUSPENDED']:
-            print "Get VMs error: param can only be set as ALL, POWER_ON, POWER_OFF, or SUSPENDED."
+        if param not in ['ALL', 'POWERED ON', 'POWERED OFF', 'SUSPENDED']:
+            print "Get VMs error: param can only be set as ALL, POWERED ON, POWERED OFF, or SUSPENDED."
             return None
         if self.connect_flag == False:
             print "Get VMs error: Server not connected."
             return None
         if param == 'ALL':
             return self.server.get_registered_vms(datacenter, cluster, resource_pool)
-        elif param == 'POWER_ON':
+        elif param == 'POWERED ON':
             return self.server.get_registered_vms(datacenter, cluster, resource_pool, status='poweredOn')
-        elif param == 'POWER_OFF':
+        elif param == 'POWERED OFF':
             return self.server.get_registered_vms(datacenter, cluster, resource_pool, status='poweredOff')
         elif param == 'SUSPENDED':
             return self.server.get_registered_vms(datacenter, cluster, resource_pool, status='suspended')
@@ -129,7 +125,7 @@ class ESXi_Server:
         try:
             hosts_dic = self.server.get_hosts(from_mor)
         except:
-            print "Get hosts error!"
+            LOG.error("Get hosts error!")
             return None
         return hosts_dic
     
@@ -137,39 +133,50 @@ class ESXi_Server:
         """
         Run vm by name.
         """
-        vm = self.server.get_vm_by_name(name, datacenter)
-        status = vm.get_status()
-        if status  == 'POWER_ON':
-            pass
-        else status == 'POWER_OFF':
-            try:
-                resault = vm.power_on()
-            except:
-                print "Run vm error!"
+        try:
+            vm = self.server.get_vm_by_name(name)
+            status = vm.get_status()
+            if status  == 'POWERED ON':
                 pass
+            else status == 'POWERED OFF':
+                try:
+                    resault = vm.power_on()
+                except:
+                    LOG.error("Run vm error!")
+                    pass
+        except:
+            LOG.error("Get vm status error when runing vm!")
+            pass
+
         
     def stop_vm_by_name(self, name):
         """
         Run vm by name.
         """
-        vm = self.server.get_vm_by_name(name, datacenter)
-        status = vm.get_status()
-        if status  == 'POWER_OFF':
-            pass
-        else status == 'POWER_ON':
-            try:
-                resault = vm.power_off()
-            except:
-                print "Run vm error!"
+        try:
+            vm = self.server.get_vm_by_name(name)
+            status = vm.get_status()
+            if status  == 'POWERED OFF':
                 pass
+            else status == 'POWERED ON':
+                try:
+                    resault = vm.power_off()
+                except:
+                    LOG.error("Stop vm error!")
+                    pass
+        except:
+            LOG.error("Get vm status error when stopping vm!")
+            pass
     
     def get_vm_status_by_name(self, name):
         """
         Get vm status by nam
         """
-        vm = self.server.get_vm_by_name(name, datacenter)
-        status = vm.get_status()
-        retrun status
-
-    
-        
+        try:
+            vm = self.server.get_vm_by_name(name)
+            status = vm.get_status()
+            LOG.info("Get VM status is %s" %status)
+            return status
+        except:
+            LOG.info("Get VM status error!")
+            return None

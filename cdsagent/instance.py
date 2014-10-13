@@ -6,7 +6,7 @@ import uuid
 from cdsagent import cfg
 from cdsagent import exc
 from cdsagent.common.impl_mysql import _MysqlBase
-# from cdsagent.common.VIServer import ESXi_Server
+from cdsagent.common.VIServer import ESXi_Server
 
 __author__ = 'Hardy.Zheng'
 __email__ = 'wei.zheng@yun-idc.com'
@@ -17,6 +17,13 @@ CONF = cfg.CONF
 _TASKSTATUS = ['OK', 'PROCESSING', 'ERROR']
 _INSTANCESTATUS = ['running', 'stop', 'error', 'deleteing', 'lanuching']
 _IPSTATUS = {'alloc': 1, 'un_alloc': 0}
+_DEFAULT_CUSTOMERS = '1hao'
+
+ESXI_INSTANCE_STATUS = {
+    'on': 'POWERED OFF',
+    'off': 'POWERED ON',
+    'unknow': None,
+    }
 
 
 class Instance(object):
@@ -24,6 +31,11 @@ class Instance(object):
     tasks = CONF.mysql.tasks
     instances = CONF.mysql.instances
     iptable = CONF.mysql.iptable
+    esxi = ESXi_Server()
+    esxi_cli = esxi.connect_server(
+        CONF.vsphere.host_ip,
+        CONF.vsphere.username,
+        CONF.vsphere.passwd)
 
     def found(self):
         pass
@@ -130,8 +142,8 @@ class InstanceCreate(Instance):
         return instances
 
     def alloc_instance(self, instance_uuid):
-        cmd = "update %s set is_alloc=1 where instance_uuid=\"%s\""\
-              % (self.instances, instance_uuid)
+        cmd = "update %s set is_alloc=1, status=\"%s\" where instance_uuid=\"%s\""\
+              % (self.instances, _INSTANCESTATUS[4], instance_uuid)
         self._commit(cmd)
 
     # test create Instances
@@ -141,12 +153,16 @@ class InstanceCreate(Instance):
             self._commit(cmd)
             self.alloc_ip(ip)
 
+    def lanuch(self, name):
+        self.esxi_cli.run_vm_by_name()
+
     def create(self, task_id, model_type, template_type, instances_num):
         LOG.debug("model_type:%s, template_type:%s, instances_num:%d"
                   % (model_type, template_type, instances_num))
         # self.__test_creat(instances_num, task_id, model_type, template_type)
         for i in self.get_idle_instances(instances_num, task_id, model_type, template_type):
             LOG.debug("Create Instances cmd: %s" % str(i))
+            self.lanuch(i[2])
             self.alloc_instance(i[0])
             self.alloc_ip(i[1])
 
@@ -233,16 +249,24 @@ class InstanceDelete(Instance):
 
 
 class InstanceWatchDog(Instance):
-    # esxi = ESXi_Server()
 
     # def __init__(self):
-        # self.esxi_cli = self.esxi.connect_server(
-            # CONF.vsphere.host_ip,
-            # CONF.vsphere.username,
-            # CONF.vsphere.passwd)
+        # super(InstanceWatchDog, self).__init__()
 
-    def watch_dog(self):
-        pass
+    def get_lanuching_instances(self, customers=_DEFAULT_CUSTOMERS):
+        cmd = "select instance_uuid, name from %s where customers=\"%s\" and status=\"lanuching\""\
+              % (self.instances, customers)
+        return self.conn.runCommand(cmd)
+
+    def update_instance_status(self, instance_uuid):
+        cmd = "update %s set status=\"running\" where instance_uuid=\"%s\"" \
+              % (self.instances, instance_uuid)
+        self._commit(cmd)
+
+    def watch_dog(self, instances):
+        for ins in instances:
+            if ESXI_INSTANCE_STATUS['on'] == self.get_vm_status_by_name(ins[1]):
+                self.update_instance_status(ins[0])
 
     def _set_status(self):
         pass
@@ -252,3 +276,8 @@ class InstanceWatchDog(Instance):
         LOG.debug('vsphere host_ip: %s' % CONF.vsphere.host_ip)
         LOG.debug('vsphere username: %s' % CONF.vsphere.username)
         LOG.debug('vsphere passwd: %s' % CONF.vsphere.passwd)
+        instances = self.get_lanuching_instances()
+        if not instances:
+            LOG.debug("not lanuching instances")
+            return
+        self.watch_dog(instances)

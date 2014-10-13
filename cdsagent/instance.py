@@ -219,13 +219,13 @@ class InstanceDelete(Instance):
     DELETE_CMD = "delete from %s where instance_uuid=\"%s\""
 
     def get_instance_uuid(self):
-        cmd = "select instance_uuid, ip from %s where status=\"deleting\""\
+        cmd = "select instance_uuid, ip, name from %s where status=\"deleting\""\
               % (self.instances)
         LOG.debug('DELETE_CMD: %s' % cmd)
         return self.conn.runCommand(cmd)
 
     def _instance_split(self, instance):
-        return instance[0], instance[1]
+        return instance[0], instance[1], instance[2]
 
     def free_ip(self, ip):
         LOG.debug('free ip : %s' % ip)
@@ -233,10 +233,11 @@ class InstanceDelete(Instance):
         self._commit(cmd)
 
     def delete(self, instance):
-        instance_uuid, ip = self._instance_split(instance)
+        instance_uuid, ip, name = self._instance_split(instance)
         LOG.debug('Delete instance uuid: %s' % instance_uuid)
         LOG.debug('Delete instance ip: %s' % ip)
         cmd = self.DELETE_CMD % (self.instances, instance_uuid)
+        self.esxi.stop_vm_by_name(name)
         self._commit(cmd)
         self.free_ip(ip)
 

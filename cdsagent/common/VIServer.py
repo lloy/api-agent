@@ -1,5 +1,5 @@
 from pysphere import VIServer
-from pysphere import VIException, VIApiException, FaultTypes
+from pysphere import VIException, VIApiException
 import logging
 
 
@@ -138,12 +138,14 @@ class ESXi_Server:
             status = vm.get_status()
             if status  == 'POWERED ON':
                 pass
-            else status == 'POWERED OFF':
+            elif status == 'POWERED OFF':
                 try:
                     resault = vm.power_on()
                 except:
                     LOG.error("Run vm error!")
                     pass
+            else:
+                pass
         except:
             LOG.error("Get vm status error when runing vm!")
             pass
@@ -158,12 +160,14 @@ class ESXi_Server:
             status = vm.get_status()
             if status  == 'POWERED OFF':
                 pass
-            else status == 'POWERED ON':
+            elif status == 'POWERED ON':
                 try:
                     resault = vm.power_off()
                 except:
                     LOG.error("Stop vm error!")
                     pass
+            else:
+                pass
         except:
             LOG.error("Get vm status error when stopping vm!")
             pass

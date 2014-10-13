@@ -3,6 +3,7 @@ import logging
 import time
 import datetime
 import uuid
+import traceback
 from cdsagent import cfg
 from cdsagent import exc
 from cdsagent.common.impl_mysql import _MysqlBase
@@ -20,8 +21,8 @@ _IPSTATUS = {'alloc': 1, 'un_alloc': 0}
 _DEFAULT_CUSTOMERS = '1hao'
 
 ESXI_INSTANCE_STATUS = {
-    'on': 'POWERED OFF',
-    'off': 'POWERED ON',
+    'on': 'POWERED ON',
+    'off': 'POWERED OFF',
     'unknow': None,
     }
 
@@ -32,7 +33,7 @@ class Instance(object):
     instances = CONF.mysql.instances
     iptable = CONF.mysql.iptable
     esxi = ESXi_Server()
-    esxi_cli = esxi.connect_server(
+    esxi.connect_server(
         CONF.vsphere.host_ip,
         CONF.vsphere.username,
         CONF.vsphere.passwd)
@@ -133,7 +134,7 @@ class InstanceCreate(Instance):
                                   off_time), ip
 
     def get_idle_instances(self, num, task_id, model_type, template_type):
-        cmd = "select instance_uuid, ip, name from %s where is_alloc=0 limit %d"\
+        cmd = "select instance_uuid, ip, name from %s where is_alloc=0 and status=\"stop\" limit %d"\
               % (self.instances, num)
         LOG.debug("get_idle_instances cmd: %s" % cmd)
         instances = self.conn.runCommand(cmd)
@@ -154,7 +155,13 @@ class InstanceCreate(Instance):
             self.alloc_ip(ip)
 
     def lanuch(self, name):
-        self.esxi_cli.run_vm_by_name()
+        LOG.debug("lanuch instance name: %s" % name)
+        LOG.debug("lanuch esxi: %s" % self.esxi)
+        # LOG.debug("lanuch instance name: %s" % name)
+        if not self.esxi:
+            LOG.debug("EsxiNotConnect: esx is None")
+            raise exc.EsxiNotConnect("esxi is None")
+        self.esxi.run_vm_by_name(name)
 
     def create(self, task_id, model_type, template_type, instances_num):
         LOG.debug("model_type:%s, template_type:%s, instances_num:%d"
@@ -200,6 +207,7 @@ class InstanceCreate(Instance):
                 LOG.debug('task: %s' % str(task))
 
         except Exception, e:
+            traceback.print_exc()
             LOG.error(str(e))
 
 
@@ -250,8 +258,8 @@ class InstanceDelete(Instance):
 
 class InstanceWatchDog(Instance):
 
-    # def __init__(self):
-        # super(InstanceWatchDog, self).__init__()
+    def __init__(self):
+        self.conn = _MysqlBase()
 
     def get_lanuching_instances(self, customers=_DEFAULT_CUSTOMERS):
         cmd = "select instance_uuid, name from %s where customers=\"%s\" and status=\"lanuching\""\
@@ -265,19 +273,26 @@ class InstanceWatchDog(Instance):
 
     def watch_dog(self, instances):
         for ins in instances:
-            if ESXI_INSTANCE_STATUS['on'] == self.get_vm_status_by_name(ins[1]):
+            LOG.debug('update Instance %s' % str(ins))
+            if ESXI_INSTANCE_STATUS['on'] == self.esxi.get_vm_status_by_name(ins[1]):
+                LOG.debug("XXXXRUN update_instance_status: %s" % str(ins))
                 self.update_instance_status(ins[0])
 
     def _set_status(self):
         pass
 
     def run(self):
-        LOG.debug('run watch_dog')
-        LOG.debug('vsphere host_ip: %s' % CONF.vsphere.host_ip)
-        LOG.debug('vsphere username: %s' % CONF.vsphere.username)
-        LOG.debug('vsphere passwd: %s' % CONF.vsphere.passwd)
-        instances = self.get_lanuching_instances()
-        if not instances:
-            LOG.debug("not lanuching instances")
-            return
-        self.watch_dog(instances)
+        try:
+            LOG.debug('run watch_dog')
+            LOG.debug('vsphere host_ip: %s' % CONF.vsphere.host_ip)
+            LOG.debug('vsphere username: %s' % CONF.vsphere.username)
+            LOG.debug('vsphere passwd: %s' % CONF.vsphere.passwd)
+            self.conn.refresh()
+            instances = self.get_lanuching_instances()
+            LOG.debug('get_lanuching_instances %s' % str(instances))
+            if not instances:
+                LOG.debug("not lanuching instances")
+                return
+            self.watch_dog(instances)
+        except Exception, e:
+            LOG.error("WATCH_DOG error: %s" % str(e))

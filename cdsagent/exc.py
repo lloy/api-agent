@@ -42,6 +42,10 @@ class NotAllocInstance(Exception):
     pass
 
 
+class EsxiNotConnect(Exception):
+    pass
+
+
 class NotFoundConfigureFile(ConfigureException):
     """
     errno = 0000-001-01

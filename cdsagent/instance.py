@@ -66,10 +66,11 @@ class InstanceCreate(Instance):
     instance_type,\
     iaas_type,\
     customers,\
+    is_alloc,\
     create_time,\
     online_time,\
     off_time) values(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\
-    \"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\")"
+    \"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%d\",\"%s\",\"%s\",\"%s\")"
     TITLE = "instance-%s"
     DEFAULT_IAAS_TYPE = "vsphere"
     DEFAULT_CUSTOMERS = "1hao"
@@ -89,7 +90,7 @@ class InstanceCreate(Instance):
         else:
             return None
 
-    def _getcmd(self, num, task_id, model_type, template_type):
+    def _create_cmd(self, task_id, model_type, template_type):
         instance_uuid = str(uuid.uuid1())
         name = self.TITLE % instance_uuid
         ts = time.time()
@@ -102,6 +103,7 @@ class InstanceCreate(Instance):
         instance_type = model_type
         iaas_type = self.DEFAULT_IAAS_TYPE
         customers = self.DEFAULT_CUSTOMERS
+        is_alloc = 0
         create_time = online_time = off_time = timestamp
         return self.CREATE_CMD % (instance_uuid, task_id, name,
                                   ip,
@@ -113,18 +115,40 @@ class InstanceCreate(Instance):
                                   instance_type,
                                   iaas_type,
                                   customers,
+                                  is_alloc,
                                   create_time,
                                   online_time,
                                   off_time), ip
 
+    def get_idle_instances(self, num, task_id, model_type, template_type):
+        cmd = "select instance_uuid, ip, name from %s where is_alloc=0 limit %d"\
+              % (self.instances, num)
+        LOG.debug("get_idle_instances cmd: %s" % cmd)
+        instances = self.conn.runCommand(cmd)
+        if not instances:
+            raise exc.NotAllocInstance("Not instance alloc")
+        return instances
+
+    def alloc_instance(self, instance_uuid):
+        cmd = "update %s set is_alloc=1 where instance_uuid=\"%s\""\
+              % (self.instances, instance_uuid)
+        self._commit(cmd)
+
+    # test create Instances
+    def __test_creat(self, instances_num, task_id, model_type, template_type):
+        for i in range(0, instances_num):
+            cmd, ip = self._create_cmd(task_id, model_type, template_type)
+            self._commit(cmd)
+            self.alloc_ip(ip)
+
     def create(self, task_id, model_type, template_type, instances_num):
         LOG.debug("model_type:%s, template_type:%s, instances_num:%d"
                   % (model_type, template_type, instances_num))
-        for i in range(0, instances_num):
-            cmd, ip = self._getcmd(i, task_id, model_type, template_type)
-            LOG.debug("Create Instances cmd: %s" % cmd)
-            self._commit(cmd)
-            self.alloc_ip(ip)
+        # self.__test_creat(instances_num, task_id, model_type, template_type)
+        for i in self.get_idle_instances(instances_num, task_id, model_type, template_type):
+            LOG.debug("Create Instances cmd: %s" % str(i))
+            self.alloc_instance(i[0])
+            self.alloc_ip(i[1])
 
     def alloc_ip(self, ip):
         LOG.debug('alloc ip : %s' % ip)

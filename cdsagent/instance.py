@@ -59,6 +59,9 @@ class Instance(object):
     def free_ip(self):
         pass
 
+    def get_processing_task(self):
+        pass
+
     def _commit(self, cmd):
         self.conn.runCommand(cmd)
         self.conn.conn.commit()
@@ -92,10 +95,11 @@ class InstanceCreate(Instance):
 
     def __init__(self):
         self.conn = _MysqlBase()
+        self.executed_tasks = []
 
     def get_processing_task(self):
         cmd = "select task_id, model_type, template_type, instances_num from %s \
-                where status=\"%s\"" % (self.tasks, _TASKSTATUS[1])
+                where status=\"%s\" and is_run=0" % (self.tasks, _TASKSTATUS[1])
         LOG.debug('get_processing_task cmd: %s' % cmd)
         tasks = self.conn.runCommand(cmd)
         if tasks:
@@ -109,7 +113,7 @@ class InstanceCreate(Instance):
         ts = time.time()
         timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
         ip = self.get_idle_ip()
-        status = "OK"
+        status = "running"
         username = self.DEFAULT_USERNAME
         passwd = self.DEFAULT_PASSWD
         os_type = template_type
@@ -186,10 +190,16 @@ class InstanceCreate(Instance):
             return ips[0][0]
         raise exc.NotAllocIp('Not used Ipaddress')
 
-    def finish_task(self, task_id):
-        cmd = "update %s set status=\"OK\" where task_id=\"%s\"" % (self.tasks, task_id)
-        LOG.debug("finish task cmd: %s" % cmd)
+    def is_executed_task(self, task_id):
+        if task_id in self.executed_tasks:
+            LOG.debug("task id: [%s] have already beed executed" % task_id)
+            return True
+        return False
+
+    def set_executed_task(self, task_id):
+        cmd = "update %s set is_run=1 where task_id=\"%s\"" % (self.tasks, task_id)
         self._commit(cmd)
+        self.executed_tasks.append(task_id)
 
     def run(self):
         LOG.info('action: Create Instances')
@@ -202,9 +212,13 @@ class InstanceCreate(Instance):
                 return
 
             for task in processing_tasks:
-                self.create(task[0], task[1], task[2], task[3])
-                self.finish_task(task[0])
                 LOG.debug('task: %s' % str(task))
+                task_id = task[0]
+                if self.is_executed_task(task_id):
+                    continue
+                self.create(task_id, task[1], task[2], task[3])
+                # self.finish_task(task[0])
+                self.set_executed_task(task_id)
 
         except Exception, e:
             traceback.print_exc()
@@ -262,6 +276,39 @@ class InstanceWatchDog(Instance):
     def __init__(self):
         self.conn = _MysqlBase()
 
+    def get_processing_task(self):
+        cmd = "select task_id, instances_num from %s where status=\"%s\""\
+              % (self.tasks, _TASKSTATUS[1])
+        return self.conn.runCommand(cmd)
+
+    def _is_finished_task(self, task_id, num):
+        cmd = "select instance_uuid from %s where status=\"%s\"\
+              and task_id=\"%s\""\
+              % (self.instances, _INSTANCESTATUS[0], task_id)
+        LOG.debug("_is_finished_task cmd :%s" % cmd)
+        instances = self.conn.runCommand(cmd)
+        LOG.debug("_is_finished_task instances: %s" % str(instances))
+        if not instances:
+            return False
+        LOG.debug("XXXX instances Length : %d" % len(instances))
+        if len(instances) == num:
+            return True
+        return False
+
+    def update_task_status(self, task_id):
+        cmd = "update %s set status=\"OK\" where task_id=\"%s\"" % (self.tasks, task_id)
+        LOG.debug("finish task cmd: %s" % cmd)
+        self._commit(cmd)
+
+    def watch_tasks(self):
+        task_processing = self.get_processing_task()
+        if not task_processing:
+            LOG.debug("Not PROCESSING tasks")
+            return
+        for task in task_processing:
+            if self._is_finished_task(task[0], task[1]):
+                self.update_task_status(task[0])
+
     def get_lanuching_instances(self, customers=_DEFAULT_CUSTOMERS):
         cmd = "select instance_uuid, name from %s where customers=\"%s\" and status=\"lanuching\""\
               % (self.instances, customers)
@@ -272,7 +319,7 @@ class InstanceWatchDog(Instance):
               % (self.instances, instance_uuid)
         self._commit(cmd)
 
-    def watch_dog(self, instances):
+    def watch_instances(self, instances):
         for ins in instances:
             LOG.debug('update Instance %s' % str(ins))
             if ESXI_INSTANCE_STATUS['on'] == self.esxi.get_vm_status_by_name(ins[1]):
@@ -291,9 +338,10 @@ class InstanceWatchDog(Instance):
             self.conn.refresh()
             instances = self.get_lanuching_instances()
             LOG.debug('get_lanuching_instances %s' % str(instances))
-            if not instances:
+            if instances:
+                self.watch_instances(instances)
+            else:
                 LOG.debug("not lanuching instances")
-                return
-            self.watch_dog(instances)
+            self.watch_tasks()
         except Exception, e:
             LOG.error("WATCH_DOG error: %s" % str(e))

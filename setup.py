@@ -16,7 +16,7 @@ setup(
         'eventlet>=0.13.0',
         'PasteDeploy>=1.5.0',
         'six>=1.7.0',
-        # 'pysphere>=0.5',
+        'pysphere>=0.1',
         'stevedore>=0.14',
         'jsonschema>=2.0.0,<3.0.0',
         'jsonpath-rw>=1.2.0,<2.0',

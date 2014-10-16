@@ -137,18 +137,26 @@ class InstanceCreate(Instance):
                                   online_time,
                                   off_time), ip
 
-    def get_idle_instances(self, num, task_id, model_type, template_type):
-        cmd = "select instance_uuid, ip, name from %s where is_alloc=0 and status=\"stop\" limit %d"\
-              % (self.instances, num)
+    def get_idle_instances(self, num, model_type, template_type):
+        cmd = "select instance_uuid, ip, name from %s where is_alloc=0 and status=\"stop\" \
+                and instance_type=\"%s\" and template_type=\"%s\" limit %d"\
+              % (self.instances, model_type, template_type, num)
         LOG.debug("get_idle_instances cmd: %s" % cmd)
         instances = self.conn.runCommand(cmd)
         if not instances:
             raise exc.NotAllocInstance("Not instance alloc")
         return instances
 
-    def alloc_instance(self, instance_uuid):
-        cmd = "update %s set is_alloc=1, status=\"%s\" where instance_uuid=\"%s\""\
-              % (self.instances, _INSTANCESTATUS[4], instance_uuid)
+    def alloc_instance(self, instance_uuid, task_id, customers="1hao"):
+        cmd = "update %s set is_alloc=1, task_id=\"%s\", customers=\"%s\", \
+               status=\"%s\" where instance_uuid=\"%s\""\
+              % (self.instances, task_id, customers, _INSTANCESTATUS[4], instance_uuid)
+        LOG.debug("alloc_instance cmd: %s" % cmd)
+        self._commit(cmd)
+
+    def alloc_ip(self, ip):
+        LOG.debug('alloc ip : %s' % ip)
+        cmd = "update %s set is_alloc=1 where ipaddress=\"%s\"" % (self.iptable, ip.strip())
         self._commit(cmd)
 
     # test create Instances
@@ -165,22 +173,17 @@ class InstanceCreate(Instance):
         if not self.esxi:
             LOG.debug("EsxiNotConnect: esx is None")
             raise exc.EsxiNotConnect("esxi is None")
-        self.esxi.run_vm_by_name(name)
+        self.esxi.run_vm_by_name(name.title())
 
     def create(self, task_id, model_type, template_type, instances_num):
         LOG.debug("model_type:%s, template_type:%s, instances_num:%d"
                   % (model_type, template_type, instances_num))
         # self.__test_creat(instances_num, task_id, model_type, template_type)
-        for i in self.get_idle_instances(instances_num, task_id, model_type, template_type):
+        for i in self.get_idle_instances(instances_num, model_type, template_type):
             LOG.debug("Create Instances cmd: %s" % str(i))
             self.lanuch(i[2])
-            self.alloc_instance(i[0])
-            self.alloc_ip(i[1])
-
-    def alloc_ip(self, ip):
-        LOG.debug('alloc ip : %s' % ip)
-        cmd = "update %s set is_alloc=1 where ipaddress=\"%s\"" % (self.iptable, ip.strip())
-        self._commit(cmd)
+            self.alloc_instance(i[0], task_id)
+            # self.alloc_ip(i[1])
 
     def get_idle_ip(self):
         cmd = "select ipaddress from %s where is_alloc=0" % (self.iptable)
@@ -230,7 +233,7 @@ class InstanceDelete(Instance):
     def __init__(self):
         self.conn = _MysqlBase()
 
-    DELETE_CMD = "delete from %s where instance_uuid=\"%s\""
+    DELETE_CMD = "update %s set status=\"%s\", customers=NULL where instance_uuid=\"%s\""
 
     def get_instance_uuid(self):
         cmd = "select instance_uuid, ip, name from %s where status=\"deleting\""\
@@ -248,10 +251,11 @@ class InstanceDelete(Instance):
 
     def delete(self, instance):
         instance_uuid, ip, name = self._instance_split(instance)
-        LOG.debug('Delete instance uuid: %s' % instance_uuid)
+        LOG.info('Delete instance uuid: %s' % instance_uuid)
         LOG.debug('Delete instance ip: %s' % ip)
-        cmd = self.DELETE_CMD % (self.instances, instance_uuid)
-        self.esxi.stop_vm_by_name(name)
+        cmd = self.DELETE_CMD % (self.instances, _INSTANCESTATUS[2], instance_uuid)
+        LOG.debug("Delete Instances cmd: %s" % cmd)
+        self.esxi.stop_vm_by_name(name.title())
         self._commit(cmd)
         self.free_ip(ip)
 
@@ -322,7 +326,8 @@ class InstanceWatchDog(Instance):
     def watch_instances(self, instances):
         for ins in instances:
             LOG.debug('update Instance %s' % str(ins))
-            if ESXI_INSTANCE_STATUS['on'] == self.esxi.get_vm_status_by_name(ins[1]):
+            name = ins[1].title()
+            if ESXI_INSTANCE_STATUS['on'] == self.esxi.get_vm_status_by_name(name):
                 LOG.debug("XXXXRUN update_instance_status: %s" % str(ins))
                 self.update_instance_status(ins[0])
 

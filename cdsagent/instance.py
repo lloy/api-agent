@@ -170,9 +170,13 @@ class InstanceCreate(Instance):
         LOG.debug("lanuch instance name: %s" % name)
         LOG.debug("lanuch esxi: %s" % self.esxi)
         # LOG.debug("lanuch instance name: %s" % name)
-        if not self.esxi:
-            LOG.debug("EsxiNotConnect: esx is None")
-            raise exc.EsxiNotConnect("esxi is None")
+        if not self.esxi.keep_session_alive():
+            self.esxi.connect_server(
+                CONF.vsphere.host_ip,
+                CONF.vsphere.username,
+                CONF.vsphere.passwd)
+            LOG.warning("EsxiNotConnect: connect once")
+            # raise exc.EsxiNotConnect("esxi is None")
         self.esxi.run_vm_by_name(name.title())
 
     def create(self, task_id, model_type, template_type, instances_num):
@@ -255,6 +259,11 @@ class InstanceDelete(Instance):
         LOG.debug('Delete instance ip: %s' % ip)
         cmd = self.DELETE_CMD % (self.instances, _INSTANCESTATUS[2], instance_uuid)
         LOG.debug("Delete Instances cmd: %s" % cmd)
+        if not self.esxi.keep_session_alive():
+            self.esxi.connect_server(
+                CONF.vsphere.host_ip,
+                CONF.vsphere.username,
+                CONF.vsphere.passwd)
         self.esxi.stop_vm_by_name(name.title())
         self._commit(cmd)
         self.free_ip(ip)
@@ -285,6 +294,18 @@ class InstanceWatchDog(Instance):
               % (self.tasks, _TASKSTATUS[1])
         return self.conn.runCommand(cmd)
 
+    def relanuch(self, task_id):
+        LOG.debug('DO relanuch in watch_dog')
+        cmd = "select name from %s where status=\"%s\"\
+              and task_id=\"%s\""\
+              % (self.instances, _INSTANCESTATUS[4], task_id)
+        instances = self.conn.runCommand(cmd)
+        if not instances:
+            return
+        for ins in instances:
+            LOG.debug('do relanuch Instance name %s' % str(ins))
+            self.esxi.run_vm_by_name(ins[0].title())
+
     def _is_finished_task(self, task_id, num):
         cmd = "select instance_uuid from %s where status=\"%s\"\
               and task_id=\"%s\""\
@@ -292,11 +313,9 @@ class InstanceWatchDog(Instance):
         LOG.debug("_is_finished_task cmd :%s" % cmd)
         instances = self.conn.runCommand(cmd)
         LOG.debug("_is_finished_task instances: %s" % str(instances))
-        if not instances:
-            return False
-        LOG.debug("XXXX instances Length : %d" % len(instances))
-        if len(instances) == num:
+        if instances and len(instances) == num:
             return True
+        self.relanuch(task_id)
         return False
 
     def update_task_status(self, task_id):
@@ -324,6 +343,11 @@ class InstanceWatchDog(Instance):
         self._commit(cmd)
 
     def watch_instances(self, instances):
+        if not self.esxi.keep_session_alive():
+            self.esxi.connect_server(
+                CONF.vsphere.host_ip,
+                CONF.vsphere.username,
+                CONF.vsphere.passwd)
         for ins in instances:
             LOG.debug('update Instance %s' % str(ins))
             name = ins[1].title()

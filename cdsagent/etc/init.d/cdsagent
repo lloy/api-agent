@@ -8,34 +8,37 @@ set -e
 
 NAME=cds-agent
 PIDFILE=/var/run/$NAME.pid
-DAEMON=/usr/bin/cds-agent
+DAEMON=/usr/local/bin/$NAME
 
-DAEMON_OPTS="--baz=quux"
+#DAEMON_OPTS="--baz=quux"
+DAEMON_OPTS="--config=/etc/cds/cds.cfg"
 
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+. /lib/lsb/init-functions
+
+test -f $DAEMON || exit 0
 
 case "$1" in
     start)
-        echo -n "start service":$NAME
-        start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --$DAEMON_OPTS
-        exit 0
+        log_daemon_msg  "Start Service $NAME.."
+        start-stop-daemon -S -q -b -m -p $PIDFILE --exec $DAEMON -- $DAEMON_OPTS 
+	    log_end_msg $?
         ;;
     stop)
-        echo -n "stop service": $NAME
-        start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE 
-        exit 0
+        log_daemon_msg  "Stop Service $NAME.."
+        start-stop-daemon -K -q -p $PIDFILE 
+	    log_end_msg $?
         ;;
     status)
-        start-stop-daemon --status --name $PROG
-        exit 0
+        status_of_proc -p $PIDFILE $DAEMON cds-agent exit 0 || exit $?
         ;;
     restart)
-        echo -n "Restarting service: "$NAME
-	    start-stop-daemon --stop --quiet --oknodo --retry 30 --pidfile $PIDFILE
-	    start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
-        exit 0
+        log_daemon_msg "Restarting service $NAME.."
+        start-stop-daemon -K -q -p $PIDFILE 
+        start-stop-daemon -S -q -b -m -p $PIDFILE --exec $DAEMON -- $DAEMON_OPTS 
+	    log_end_msg $?
         ;;
     *):
         echo "Usage: $1 {start|stop|status|restart}"
-        exit 1
+        exit 2
 esac

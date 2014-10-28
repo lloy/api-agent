@@ -13,9 +13,9 @@ _DEFAULT_CONFIG = {
     'log': {
         'handler': 'rotating',
         'path': '/var/log/cds/cdsagent.log',
-        'max_bytes': '1*1024*1024',
-        'back_count': 5,
-        'level': '1'},
+        'max_bytes': 2*1024,
+        'back_count': 10,
+        'level': '0'},
     'mysql': {
         'host': 'localhost',
         'port': 3306,

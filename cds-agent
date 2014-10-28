@@ -20,17 +20,6 @@ def run():
     os_service.launch(AgentManager()).wait()
 
 
-def set_log(name):
-    log_handlers = [h.strip() for h in cfg.CONF.log.handler.split(',')]
-    logger = Logger(name,
-                    cfg.CONF.log.level,
-                    cfg.CONF.log.path,
-                    log_handlers,
-                    cfg.CONF.log.max_bytes,
-                    cfg.CONF.log.back_count)
-    return logger.setup()
-
-
 def set_configure(filename):
     try:
         cfg.CONF(filename)
@@ -44,7 +33,6 @@ def main():
         parser.error("not input config file, --config filename")
 
     set_configure(options.filename)
-    set_log('cds-agent')
     run()
 
 if __name__ == '__main__':
